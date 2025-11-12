@@ -1,0 +1,11 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Use your app's splash background color -->
+    <item android:drawable="@color/splash_background"/>
+
+    <!-- Optional: show your splash logo in center -->
+    <item>
+        <bitmap
+            android:gravity="center"
+            android:src="@drawable/flight_off_landing_page" />
+    </item>
+</layer-list>
