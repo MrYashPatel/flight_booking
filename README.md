@@ -1,6 +1,9 @@
 # flight_booking
 
-A Flight Booking Project
+A Flight Booking Project.
+
+This is a Ui render of a Flight booking Figma Design.
+https://www.figma.com/design/nq8ZicL3XXWx7A5qrnYzBu/Flight-Booking-App-UI-Kits--Community-?node-id=72-1701&p=f&t=3jLp0HAgaALoCJAO-0
 
 ## Getting Started
 
