@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter_typeahead/flutter_typeahead.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'date_picker.dart'; // 👈 Make sure this file exists
+import 'airport_service.dart';
+import 'date_picker.dart';
 
 class HomeFlightForm extends StatefulWidget {
   final int tripType; // 0 = One Way, 1 = Round, 2 = Multicity
@@ -15,14 +17,22 @@ class HomeFlightForm extends StatefulWidget {
 
 class _HomeFlightFormState extends State<HomeFlightForm>
     with SingleTickerProviderStateMixin {
-  String fromCity = 'Delhi';
-  String fromAirport = 'Indira Gandhi Intl Airport';
-  String toCity = 'Kolkata';
-  String toAirport = 'Subhash Chandra Intl Airport';
+  // ✈️ Airport fields
+  late String fromCity, fromAirport, toCity, toAirport;
 
-  // ✅ Default today's date
+  // 📅 Dates
   String departureDate = DateFormat('dd/MM/yyyy').format(DateTime.now());
   String? returnDate;
+
+  // 👤 Travellers & Class
+  int travellerCount = 1;
+  String travelClass = 'Economy';
+  final List<String> travelClasses = [
+    'Economy',
+    'Premium Economy',
+    'Business',
+    'First'
+  ];
 
   late AnimationController _controller;
   late Animation<double> _animation;
@@ -51,7 +61,7 @@ class _HomeFlightFormState extends State<HomeFlightForm>
     });
   }
 
-  /// ✅ Opens DatePicker for either departure or return date
+  /// Opens DatePicker for either departure or return date
   Future<void> _openDatePicker(bool isDeparture) async {
     final result = await Navigator.push(
       context,
@@ -68,12 +78,9 @@ class _HomeFlightFormState extends State<HomeFlightForm>
 
     if (result != null && mounted) {
       setState(() {
-        // Set departure date
         if (isDeparture && result['departure'] != null) {
           departureDate =
-          "${result['departure'].day.toString().padLeft(2, '0')}/${result['departure'].month.toString().padLeft(2, '0')}/${result['departure'].year}";
-
-          // reset return if it becomes invalid
+              DateFormat('dd/MM/yyyy').format(result['departure']);
           if (returnDate != null) {
             final dep = result['departure'];
             final ret = DateFormat('dd/MM/yyyy').parse(returnDate!);
@@ -81,11 +88,9 @@ class _HomeFlightFormState extends State<HomeFlightForm>
           }
         }
 
-        // Set return date
         if (!isDeparture && result['return'] != null) {
           final dep = DateFormat('dd/MM/yyyy').parse(departureDate);
           final ret = result['return'];
-
           if (ret.isBefore(dep)) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -93,8 +98,7 @@ class _HomeFlightFormState extends State<HomeFlightForm>
               ),
             );
           } else {
-            returnDate =
-            "${ret.day.toString().padLeft(2, '0')}/${ret.month.toString().padLeft(2, '0')}/${ret.year}";
+            returnDate = DateFormat('dd/MM/yyyy').format(ret);
           }
         }
       });
@@ -124,12 +128,12 @@ class _HomeFlightFormState extends State<HomeFlightForm>
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _legendField(label: 'From', city: fromCity, airport: fromAirport),
+              _legendField(label: 'From', isFromField: true),
               SizedBox(height: 20.h),
-              _legendField(label: 'To', city: toCity, airport: toAirport),
+              _legendField(label: 'To', isFromField: false),
               SizedBox(height: 20.h),
 
-              // 🗓 Date Row
+              // 🗓 Date selection
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -159,15 +163,17 @@ class _HomeFlightFormState extends State<HomeFlightForm>
 
               SizedBox(height: 20.h),
 
+              // 👤 Traveller and Class selection
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _smallField('Traveller', '1 Adult'),
-                  _smallField('Class', 'Economy'),
+                  _travellerSelector(),
+                  _classSelector(),
                 ],
               ),
               SizedBox(height: 24.h),
 
+              // 🔍 Search button
               SizedBox(
                 width: double.infinity,
                 height: 48.h,
@@ -178,7 +184,22 @@ class _HomeFlightFormState extends State<HomeFlightForm>
                       borderRadius: BorderRadius.circular(8.r),
                     ),
                   ),
-                  onPressed: () {},
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        title: const Text('Search Parameters'),
+                        content: Text(
+                          'From: $fromCity ($fromAirport)\n'
+                              'To: $toCity ($toAirport)\n'
+                              'Departure: $departureDate\n'
+                              '${returnDate != null ? "Return: $returnDate\n" : ""}'
+                              'Travellers: $travellerCount\n'
+                              'Class: $travelClass',
+                        ),
+                      ),
+                    );
+                  },
                   child: Text(
                     'Search Flights',
                     style: GoogleFonts.inter(
@@ -192,7 +213,7 @@ class _HomeFlightFormState extends State<HomeFlightForm>
             ],
           ),
 
-          // 🔁 Swap button
+          // 🔁 Swap Button
           Positioned(
             right: 16.w,
             top: 40.h,
@@ -228,44 +249,81 @@ class _HomeFlightFormState extends State<HomeFlightForm>
     );
   }
 
-  // ✈️ City/Airport input
+  // 🧭 Editable Airport Field
   Widget _legendField({
     required String label,
-    required String city,
-    required String airport,
+    required bool isFromField,
   }) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
         Container(
-          width: double.infinity,
           padding: EdgeInsets.fromLTRB(12.w, 12.h, 12.w, 10.h),
           decoration: BoxDecoration(
             border: Border.all(color: Colors.grey.shade400, width: 1),
             borderRadius: BorderRadius.circular(8.r),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                city,
-                style: GoogleFonts.inter(
-                  fontSize: 16.sp,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.black,
-                  height: 1.1,
+          child: TypeAheadField<Map<String, String>>(
+            suggestionsCallback: (pattern) async {
+              return await AirportService.fetchAirports(pattern);
+            },
+            itemBuilder: (context, suggestion) {
+              return ListTile(
+                leading: CircleAvatar(
+                  radius: 14,
+                  backgroundColor: Colors.orange.shade50,
+                  child: Text(
+                    suggestion['iata']!.isNotEmpty
+                        ? suggestion['iata']!
+                        : suggestion['icao'] ?? '-',
+                    style: GoogleFonts.inter(
+                      fontSize: 12.sp,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFFEC441E),
+                    ),
+                  ),
                 ),
-              ),
-              SizedBox(height: 2.h),
-              Text(
-                airport,
-                style: GoogleFonts.inter(
-                  fontSize: 12.sp,
-                  color: Colors.grey.shade600,
-                  fontWeight: FontWeight.w400,
+                title: Text(
+                  suggestion['name']!,
+                  style: GoogleFonts.inter(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-            ],
+                subtitle: Text(
+                  "${suggestion['city']} • ${suggestion['country']}",
+                  style: GoogleFonts.inter(
+                    fontSize: 12.sp,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              );
+            },
+            onSelected: (suggestion) {
+              setState(() {
+                if (isFromField) {
+                  fromCity = suggestion['city']!;
+                  fromAirport =
+                  "${suggestion['name']} (${suggestion['iata'] ?? suggestion['icao']})";
+                } else {
+                  toCity = suggestion['city']!;
+                  toAirport =
+                  "${suggestion['name']} (${suggestion['iata'] ?? suggestion['icao']})";
+                }
+              });
+            },
+            builder: (context, controller, focusNode) {
+              return TextField(
+                controller: controller,
+                focusNode: focusNode,
+                decoration: InputDecoration(
+                  hintText: isFromField
+                      ? 'Enter departure city or airport'
+                      : 'Enter destination city or airport',
+                  border: InputBorder.none,
+                ),
+              );
+            },
           ),
         ),
         Positioned(
@@ -285,6 +343,163 @@ class _HomeFlightFormState extends State<HomeFlightForm>
           ),
         ),
       ],
+    );
+  }
+
+  // 👤 Traveller Selector (Bottom Sheet)
+  Widget _travellerSelector() {
+    return GestureDetector(
+      onTap: _showTravellerSelector,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Traveller',
+            style: GoogleFonts.inter(
+              fontSize: 12.sp,
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          SizedBox(height: 4.h),
+          Text(
+            '$travellerCount Adult${travellerCount > 1 ? 's' : ''}',
+            style: GoogleFonts.inter(
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w600,
+              color: Colors.black,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 🏷️ Class Selector (Bottom Sheet)
+  Widget _classSelector() {
+    return GestureDetector(
+      onTap: _showClassSelector,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Class',
+            style: GoogleFonts.inter(
+              fontSize: 12.sp,
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          SizedBox(height: 4.h),
+          Text(
+            travelClass,
+            style: GoogleFonts.inter(
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w600,
+              color: Colors.black,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 📋 Bottom Sheet for Traveller
+  void _showTravellerSelector() {
+    showModalBottomSheet(
+      context: context,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
+      ),
+      builder: (context) {
+        return Container(
+          padding: EdgeInsets.all(16.w),
+          height: 300.h,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Select Travellers',
+                style: GoogleFonts.inter(
+                  fontSize: 18.sp,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              SizedBox(height: 16.h),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: 9,
+                  itemBuilder: (context, index) {
+                    final count = index + 1;
+                    return ListTile(
+                      title: Text(
+                        '$count Adult${count > 1 ? 's' : ''}',
+                        style: GoogleFonts.inter(fontSize: 14.sp),
+                      ),
+                      trailing: travellerCount == count
+                          ? const Icon(Icons.check_circle,
+                          color: Color(0xFFEC441E))
+                          : null,
+                      onTap: () {
+                        setState(() => travellerCount = count);
+                        Navigator.pop(context);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ✈️ Bottom Sheet for Class Selection
+  void _showClassSelector() {
+    showModalBottomSheet(
+      context: context,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
+      ),
+      builder: (context) {
+        return Container(
+          padding: EdgeInsets.all(16.w),
+          height: 300.h,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Select Travel Class',
+                style: GoogleFonts.inter(
+                  fontSize: 18.sp,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              SizedBox(height: 16.h),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: travelClasses.length,
+                  itemBuilder: (context, index) {
+                    final cls = travelClasses[index];
+                    return ListTile(
+                      title: Text(cls, style: GoogleFonts.inter(fontSize: 14.sp)),
+                      trailing: travelClass == cls
+                          ? const Icon(Icons.check_circle,
+                          color: Color(0xFFEC441E))
+                          : null,
+                      onTap: () {
+                        setState(() => travelClass = cls);
+                        Navigator.pop(context);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -314,31 +529,6 @@ class _HomeFlightFormState extends State<HomeFlightForm>
               ),
             ),
           ],
-        ),
-      ],
-    );
-  }
-
-  // 👤 Traveller & Class
-  Widget _smallField(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 12.sp,
-            fontWeight: FontWeight.w500,
-            color: Colors.grey.shade600,
-          ),
-        ),
-        Text(
-          value,
-          style: GoogleFonts.inter(
-            fontSize: 14.sp,
-            fontWeight: FontWeight.w600,
-            color: Colors.black,
-          ),
         ),
       ],
     );
